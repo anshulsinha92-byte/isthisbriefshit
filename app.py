@@ -1,15 +1,72 @@
 import os
+import io
+import csv
 import json
 import re
+import sqlite3
 import time
 import tempfile
+from datetime import datetime, timezone
 from collections import defaultdict
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from anthropic import Anthropic
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "changeme")
+
+# --- SQLite Brief Repository ---
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "briefs.db")
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS briefs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brief_text TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'paste',
+            filename TEXT,
+            score INTEGER,
+            vibe TEXT,
+            roast TEXT,
+            full_result TEXT,
+            ip TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def save_brief(brief_text, source, filename, result_dict, ip):
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO briefs (brief_text, source, filename, score, vibe, roast, full_result, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                brief_text,
+                source,
+                filename,
+                result_dict.get("score"),
+                result_dict.get("vibe"),
+                result_dict.get("roast"),
+                json.dumps(result_dict),
+                ip,
+                datetime.now(timezone.utc).isoformat()
+            )
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"DB save error: {e}")
 
 # Simple in-memory rate limiter: 5 requests per IP per minute
 _rate_limits = defaultdict(list)
@@ -102,7 +159,7 @@ def roast():
         return jsonify({"error": "No brief provided"}), 400
     if len(brief_text) < 20:
         return jsonify({"error": "That's not a brief. That's barely a sentence."}), 400
-    return run_roast(brief_text)
+    return run_roast(brief_text, source="paste")
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -124,12 +181,12 @@ def upload():
             return jsonify({"error": "Could not extract enough text. Try pasting instead."}), 400
         if len(text) > 15000:
             text = text[:15000]
-        return run_roast(text)
+        return run_roast(text, source="upload", filename=file.filename)
     except Exception as e:
         print(f"Upload error: {e}")
         return jsonify({"error": "Failed to read the file. Try pasting instead."}), 500
 
-def run_roast(brief_text):
+def run_roast(brief_text, source="paste", filename=None):
     try:
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -157,6 +214,10 @@ def run_roast(brief_text):
 
         result = json.loads(result_text)
 
+        # Save brief + result to repository
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        save_brief(brief_text, source, filename, result, ip)
+
         return jsonify(result)
 
     except json.JSONDecodeError as e:
@@ -167,6 +228,67 @@ def run_roast(brief_text):
         print(f"Error type: {type(e).__name__}")
         print(f"Error detail: {e}")
         return jsonify({"error": f"Error: {type(e).__name__}: {str(e)[:200]}"}), 500
+
+# --- Admin: Brief Repository ---
+
+@app.route("/admin/briefs")
+def admin_briefs():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    rows = conn.execute("SELECT id, source, filename, score, vibe, roast, created_at FROM briefs ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/admin/briefs/<int:brief_id>")
+def admin_brief_detail(brief_id):
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    row = conn.execute("SELECT * FROM briefs WHERE id = ?", (brief_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    d = dict(row)
+    if d.get("full_result"):
+        d["full_result"] = json.loads(d["full_result"])
+    return jsonify(d)
+
+@app.route("/admin/briefs/export")
+def admin_export():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    rows = conn.execute("SELECT id, brief_text, source, filename, score, vibe, roast, ip, created_at FROM briefs ORDER BY id DESC").fetchall()
+    conn.close()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "brief_text", "source", "filename", "score", "vibe", "roast", "ip", "created_at"])
+    for r in rows:
+        writer.writerow([r["id"], r["brief_text"], r["source"], r["filename"], r["score"], r["vibe"], r["roast"], r["ip"], r["created_at"]])
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=briefs_export.csv"}
+    )
+
+@app.route("/admin/briefs/stats")
+def admin_stats():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    total = conn.execute("SELECT COUNT(*) as c FROM briefs").fetchone()["c"]
+    by_source = conn.execute("SELECT source, COUNT(*) as c FROM briefs GROUP BY source").fetchall()
+    avg_score = conn.execute("SELECT AVG(score) as avg FROM briefs WHERE score IS NOT NULL").fetchone()["avg"]
+    by_vibe = conn.execute("SELECT vibe, COUNT(*) as c FROM briefs GROUP BY vibe ORDER BY c DESC").fetchall()
+    conn.close()
+    return jsonify({
+        "total_briefs": total,
+        "by_source": {r["source"]: r["c"] for r in by_source},
+        "average_score": round(avg_score, 1) if avg_score else 0,
+        "by_vibe": {r["vibe"]: r["c"] for r in by_vibe}
+    })
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
