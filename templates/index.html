@@ -329,25 +329,7 @@
 
         .submit-btn.loading {
             color: transparent;
-        }
-
-        .submit-btn.loading::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 14px;
-            animation: loadingText 3s infinite;
-        }
-
-        @keyframes loadingText {
-            0%, 20% { content: 'Reading this mess...'; color: white; }
-            25%, 45% { content: 'Suppressing rage...'; color: white; }
-            50%, 70% { content: 'Finding the words...'; color: white; }
-            75%, 95% { content: 'Writing the roast...'; color: white; }
+            pointer-events: none;
         }
 
         .loading-dots {
@@ -355,12 +337,14 @@
         }
 
         .submit-btn.loading .loading-dots {
-            display: inline;
+            display: flex;
             position: absolute;
             inset: 0;
-            line-height: 54px;
+            align-items: center;
+            justify-content: center;
             color: white;
             font-size: 14px;
+            font-weight: 500;
         }
 
         /* ── Results ───────────────────────────────────── */
