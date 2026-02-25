@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Is This Brief Shit?</title>
-    <meta name="description" content="Paste your marketing brief. Get a brutally honest score, a roast, and a proper rewrite. Free.">
+    <meta name="description" content="Paste your marketing brief. Get a brutally honest score and a roast. No feelings spared.">
     <meta property="og:title" content="Is This Brief Shit?">
-    <meta property="og:description" content="Paste your marketing brief. Get roasted. Get fixed.">
+    <meta property="og:description" content="Paste your marketing brief. Get roasted. No survivors.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -484,79 +484,58 @@
             line-height: 1.6;
         }
 
-        /* Missing items */
-        .missing-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+        /* Missing (human stuff) */
+        .missing-card {
+            background: var(--surface);
+            border-left: 3px solid var(--orange);
+            padding: 16px 20px;
+            margin-bottom: 8px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .missing-thing {
+            font-family: var(--mono);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--orange);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .missing-joke {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        /* Next steps */
+        .next-steps-list {
             margin-top: 12px;
         }
 
-        .missing-tag {
-            font-family: var(--mono);
-            font-size: 11px;
-            letter-spacing: 0.5px;
-            padding: 6px 14px;
-            background: rgba(255, 59, 59, 0.08);
-            border: 1px solid rgba(255, 59, 59, 0.2);
-            border-radius: 3px;
-            color: var(--red);
-        }
-
-        /* Rewrite */
-        .rewrite-box {
+        .next-step {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 32px;
-            margin-top: 12px;
-            position: relative;
-        }
-
-        .rewrite-box::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--green-dim);
-            border-radius: 8px 8px 0 0;
-        }
-
-        .rewrite-content {
+            padding: 16px 20px;
+            margin-bottom: 8px;
             font-size: 14px;
-            line-height: 1.8;
+            line-height: 1.6;
             color: var(--text-dim);
-            white-space: pre-wrap;
+            position: relative;
+            padding-left: 44px;
         }
 
-        .rewrite-content strong, .rewrite-content b {
-            color: var(--text);
-            font-weight: 600;
-        }
-
-        /* Copy button */
-        .copy-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 16px;
-            padding: 8px 16px;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text-dim);
+        .next-step::before {
+            content: attr(data-num);
+            position: absolute;
+            left: 16px;
+            top: 16px;
             font-family: var(--mono);
-            font-size: 11px;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .copy-btn:hover {
-            border-color: var(--green-dim);
-            color: var(--green);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--red);
         }
 
         /* Share section */
@@ -677,7 +656,7 @@
         <header>
             <div class="header-tag">Brutally honest brief review</div>
             <h1>Is this brief<br><span class="highlight">shit?</span></h1>
-            <p class="subtitle">Paste your marketing brief. Get a score, a roast, and a proper rewrite. No feelings spared.</p>
+            <p class="subtitle">Paste your marketing brief. Get a score and a roast. No feelings spared.</p>
         </header>
 
         <div class="input-section">
@@ -733,17 +712,11 @@
             <div class="section-label">What's wrong with it</div>
             <div id="callouts"></div>
 
-            <div class="section-label">What's missing entirely</div>
-            <div class="missing-list" id="missingList"></div>
+            <div class="section-label" style="border-bottom-color: var(--orange); color: var(--orange);">The human stuff you forgot exists</div>
+            <div id="missingList"></div>
 
-            <div class="section-label" style="border-bottom-color: var(--green-dim); color: var(--green-dim);">How it should have been written</div>
-            <div class="rewrite-box">
-                <div class="rewrite-content" id="rewriteContent"></div>
-                <button class="copy-btn" onclick="copyRewrite()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                    Copy rewrite
-                </button>
-            </div>
+            <div class="section-label">So... what now?</div>
+            <div class="next-steps-list" id="nextStepsList"></div>
 
             <div class="share-section">
                 <p class="share-text">Think your colleagues write better briefs? Prove it.</p>
@@ -986,18 +959,23 @@
                 </div>
             `).join('');
 
-            // Missing
+            // Missing (human stuff)
             const missingEl = document.getElementById('missingList');
-            missingEl.innerHTML = (data.missing || []).map(m =>
-                `<span class="missing-tag">${esc(m)}</span>`
-            ).join('');
+            missingEl.innerHTML = (data.missing || []).map(m => {
+                if (typeof m === 'object' && m.thing) {
+                    return `<div class="missing-card">
+                        <div class="missing-thing">${esc(m.thing)}</div>
+                        <div class="missing-joke">${esc(m.joke)}</div>
+                    </div>`;
+                }
+                return `<div class="missing-card"><div class="missing-joke">${esc(m)}</div></div>`;
+            }).join('');
 
-            // Rewrite
-            const rewriteEl = document.getElementById('rewriteContent');
-            let rewriteText = esc(data.rewrite || '');
-            // Format section headers in the rewrite (safe since we escaped first)
-            rewriteText = rewriteText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            rewriteEl.innerHTML = rewriteText;
+            // Next steps
+            const nextStepsEl = document.getElementById('nextStepsList');
+            nextStepsEl.innerHTML = (data.next_steps || []).map((step, i) =>
+                `<div class="next-step" data-num="${i + 1}.">${esc(step)}</div>`
+            ).join('');
 
             // Show results
             results.classList.add('visible');
@@ -1019,22 +997,6 @@
             switchMode('paste');
             textarea.focus();
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function copyRewrite() {
-            const text = document.getElementById('rewriteContent').innerText;
-            navigator.clipboard.writeText(text).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                const original = btn.innerHTML;
-                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied';
-                btn.style.borderColor = 'var(--green-dim)';
-                btn.style.color = 'var(--green)';
-                setTimeout(() => {
-                    btn.innerHTML = original;
-                    btn.style.borderColor = '';
-                    btn.style.color = '';
-                }, 2000);
-            });
         }
 
         function shareLinkedIn() {
