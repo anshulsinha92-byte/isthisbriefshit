@@ -15,6 +15,25 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
+ALLOWED_ORIGINS = {
+    "https://isthisbriefshit.onrender.com",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+}
+
+@app.before_request
+def check_origin():
+    if request.path in ("/roast", "/upload"):
+        origin = request.headers.get("Origin", "")
+        referer = request.headers.get("Referer", "")
+        if origin and origin not in ALLOWED_ORIGINS:
+            return jsonify({"error": "Nice try. Use the site."}), 403
+        if not origin and referer:
+            from urllib.parse import urlparse
+            ref_origin = f"{urlparse(referer).scheme}://{urlparse(referer).netloc}"
+            if ref_origin not in ALLOWED_ORIGINS:
+                return jsonify({"error": "Nice try. Use the site."}), 403
+
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "changeme")
 
 # --- SQLite Brief Repository ---
@@ -52,7 +71,7 @@ def save_brief(brief_text, source, filename, result_dict, ip):
         conn.execute(
             "INSERT INTO briefs (brief_text, source, filename, score, vibe, roast, full_result, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                brief_text,
+                brief_text[:15000],
                 source,
                 filename,
                 result_dict.get("score"),
@@ -159,6 +178,8 @@ def roast():
         return jsonify({"error": "No brief provided"}), 400
     if len(brief_text) < 20:
         return jsonify({"error": "That's not a brief. That's barely a sentence."}), 400
+    if len(brief_text) > 15000:
+        brief_text = brief_text[:15000]
     return run_roast(brief_text, source="paste")
 
 @app.route("/upload", methods=["POST"])
